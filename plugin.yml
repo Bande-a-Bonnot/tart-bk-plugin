@@ -1,0 +1,31 @@
+name: Foundry Tart VM
+summary: Run Buildkite commands inside ephemeral Tart VMs with explicit mounts and SSH-stdin bootstrap secrets
+requirements:
+  - tart
+  - sshpass
+configuration:
+  properties:
+    image:
+      type: string
+    always_pull:
+      type: boolean
+    ssh_username:
+      type: string
+    ssh_password:
+      type: string
+    doppler_token_path:
+      type: string
+    scratch_root:
+      type: string
+    dirs:
+      type: array
+      items:
+        type: string
+    forward_env:
+      type: array
+      items:
+        type: string
+  required:
+    - image
+    - doppler_token_path
+  additionalProperties: false

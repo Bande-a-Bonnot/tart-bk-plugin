@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/shared.bash
+. "${HOOKS_DIR}/../lib/shared.bash"
+
+cleanup_vm_and_scratch
+# BuildKite pre-exit hooks must never mask the command's actual exit status.
+exit 0
