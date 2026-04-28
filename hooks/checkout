@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Suppress BuildKite's default host checkout. The VM bootstrap clones the repo
+# inside /tmp/scratch/checkout with a freshly minted GitHub App installation
+# token. NOTE: agent-level checkout hooks have precedence over this plugin hook;
+# the mini's ~/buildkite/hooks/checkout must be removed or shimmed for the live
+# foundry-agent pipeline.
+exit 0

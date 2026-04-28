@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/shared.bash
+. "${HOOKS_DIR}/../lib/shared.bash"
+
+IMAGE="$(plugin_var IMAGE || true)"
+if [ -z "${IMAGE}" ]; then
+  log "FATAL: plugin config 'image' is required"
+  exit 1
+fi
+
+SCRATCH_ROOT="$(plugin_var_default SCRATCH_ROOT /tmp)"
+HOST_SCRATCH="${SCRATCH_ROOT%/}/foundry-scratch-${build_id_for_name}"
+case "${HOST_SCRATCH}" in
+  /tmp/foundry-scratch-*|/private/tmp/foundry-scratch-*) ;;
+  *) log "FATAL: refusing unsafe scratch path: ${HOST_SCRATCH}"; exit 1 ;;
+esac
+
+cleanup_on_error() {
+  local ec=$?
+  if [ "$ec" -ne 0 ]; then
+    log "pre-command failed; cleaning VM/scratch"
+    cleanup_vm_and_scratch
+  fi
+  exit "$ec"
+}
+trap cleanup_on_error EXIT
+
+if ! command -v tart >/dev/null 2>&1; then
+  log "FATAL: tart not found on host PATH"
+  exit 1
+fi
+if ! command -v sshpass >/dev/null 2>&1; then
+  log "FATAL: sshpass not found on host PATH"
+  exit 1
+fi
+
+rm -rf "${HOST_SCRATCH}"
+mkdir -p "${HOST_SCRATCH}"
+write_state "${HOST_SCRATCH}"
+
+if [ "$(plugin_var_default ALWAYS_PULL false)" = "true" ]; then
+  log "pulling Tart image ${IMAGE}"
+  tart pull "${IMAGE}"
+fi
+
+# Reuse a clean name even after a previous crash. The LaunchAgent sweeper is
+# still the belt-and-suspenders path, but deletion here makes retries sane.
+tart stop "${VM_NAME}" >/dev/null 2>&1 || true
+tart delete "${VM_NAME}" >/dev/null 2>&1 || true
+
+log "cloning Tart VM ${VM_NAME} from ${IMAGE}"
+tart clone "${IMAGE}" "${VM_NAME}"
+
+RUN_ARGS=()
+# The scratch mount is mandatory; it carries staged scripts, checkout, and the
+# pi session file. It intentionally contains no long-lived bootstrap secrets.
+RUN_ARGS+=("--dir=scratch:${HOST_SCRATCH}")
+
+while IFS= read -r dir_spec; do
+  [ -z "${dir_spec}" ] && continue
+  # Tart directory shares are read-write by default; it supports :ro but not :rw.
+  # Accept plan-style :rw and normalize it away.
+  case "${dir_spec}" in
+    *:rw) dir_spec="${dir_spec%:rw}" ;;
+  esac
+  RUN_ARGS+=("--dir=${dir_spec}")
+done < <(plugin_array DIRS)
+
+log "starting Tart VM ${VM_NAME}"
+log "  image=${IMAGE}"
+log "  scratch=${HOST_SCRATCH}"
+nohup tart run --no-graphics "${RUN_ARGS[@]}" "${VM_NAME}" >/tmp/foundry-tart-${VM_NAME}.log 2>&1 &
+
+# Success: keep VM alive for command hook. The EXIT trap remains installed but
+# cleanup_on_error only runs destructive cleanup on non-zero exit.
+trap - EXIT
