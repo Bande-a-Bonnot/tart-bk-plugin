@@ -2,7 +2,7 @@
 
 Runs a BuildKite command inside an ephemeral Tart VM.
 
-This source tree is the canonical source for the external plugin repo used by the live pipeline (`github.com/Bande-a-Bonnot/tart-bk-plugin#v0.1.2`). BuildKite must load this as a non-vendored plugin so its `checkout` hook is available before repository checkout.
+This source tree is the canonical source for the external plugin repo used by the live pipeline (`github.com/Bande-a-Bonnot/tart-bk-plugin#<commit-sha>`). BuildKite must load this as a non-vendored plugin so its `checkout` hook is available before repository checkout. The live pipeline pins an immutable commit SHA; the pinned SHA is recorded in `foundry/buildkite/pipeline.foundry-agent.yml` and the monorepo's VM isolation docs.
 
 ## Critical hook precedence
 
@@ -17,4 +17,11 @@ BuildKite hook precedence is agent → plugin → repository. If the Mac mini ha
 
 ## Publication discipline
 
-After changing this tree, publish the exact contents to the external plugin repo and tag a new immutable version before changing the pipeline ref. Until a CI diff check exists, manually verify the external tag matches this tree.
+After changing this tree:
+
+1. Publish the exact contents to the external plugin repo.
+2. Record the resulting external commit SHA in the monorepo docs.
+3. Point `foundry/buildkite/pipeline.foundry-agent.yml` at that commit SHA, not a movable branch/tag.
+4. Run `foundry/buildkite/scripts/check-tart-plugin-drift.sh` before committing.
+
+Do not change the pipeline ref to a commit whose tree has not been checked against this directory.
